@@ -1,6 +1,8 @@
 # NetSentinel
 [![GitHub release](https://img.shields.io/github/release/kaotickj/NetSentinel.svg)](https://github.com/kaotickj/NetSentinel/releases)[![GitHub license](https://img.shields.io/github/license/kaotickj/NetSentinel.svg)](https://github.com/kaotickj/NetSentinel/LICENSE)[![Python](https://img.shields.io/badge/Python-3.7%2B-blue)](https://www.python.org/)[![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/kaotickj/NetSentinel)](https://github.com/kaotickj/NetSentinel)[![GitHub last commit](https://img.shields.io/github/last-commit/kaotickj/NetSentinel)](https://github.com/kaotickj/NetSentinel/commits/master)
 
+![NetSentinel](NetSentinel.png)
+
 ---
 
 ## 🛡️ Overview
