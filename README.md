@@ -1,5 +1,5 @@
 # NetSentinel
-[![GitHub release](https://img.shields.io/github/release/kaotickj/netsentinel.svg)](https://github.com/kaotickj/netsentinel/releases)[![GitHub license](https://img.shields.io/github/license/kaotickj/netsentinel.svg)](https://github.com/kaotickj/netsentinel/blob/master/LICENSE)[![Python](https://img.shields.io/badge/Python-3.7%2B-blue)](https://www.python.org/)[![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/kaotickj/netsentinel)](https://github.com/kaotickj/netsentinel)[![GitHub last commit](https://img.shields.io/github/last-commit/kaotickj/netsentinel)](https://github.com/kaotickj/netsentinel/commits/master)
+[![GitHub release](https://img.shields.io/github/release/kaotickj/NetSentinel.svg)](https://github.com/kaotickj/NetSentinel/releases)[![GitHub license](https://img.shields.io/github/license/kaotickj/NetSentinel.svg)](https://github.com/kaotickj/NetSentinel/blob/master/LICENSE)[![Python](https://img.shields.io/badge/Python-3.7%2B-blue)](https://www.python.org/)[![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/kaotickj/NetSentinel)](https://github.com/kaotickj/NetSentinel)[![GitHub last commit](https://img.shields.io/github/last-commit/kaotickj/NetSentinel)](https://github.com/kaotickj/NetSentinel/commits/master)
 
 ---
 
