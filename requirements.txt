@@ -1,0 +1,4 @@
+scapy>=2.4.5
+colorama>=0.4.6
+impacket>=0.11.0
+ldap3>=2.9.1
