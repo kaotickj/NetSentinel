@@ -35,8 +35,8 @@
 ### Clone the Repository
 
 ```
-git clone https://github.com/kaotickj/netsentinel.git
-cd netsentinel
+git clone https://github.com/kaotickj/NetSentinel.git
+cd NetSentinel
 ```
 
 ### Install Dependencies
@@ -111,7 +111,7 @@ python3 main.py --target 10.0.0.0/24 --smb-enum --export-json output.json
 
 A config file is required for Kerberos and LDAP functionality.
 
-Example: `netsentinel_config.json`
+Example: `NetSentinel_config.json`
 
 ```
 {
@@ -127,7 +127,7 @@ Example: `netsentinel_config.json`
 You may also use INI format:
 
 ```
-[netsentinel]
+[NetSentinel]
 domain = corp.local
 username = lowpriv
 password = Spring2025!
