@@ -1,0 +1,8 @@
+{
+  "domain": "example.local",
+  "username": "user1",
+  "password": "Passw0rd!",
+  "dc_ip": "10.0.0.1",
+  "ldap_username": "ldapuser",
+  "ldap_password": "ldappass"
+}

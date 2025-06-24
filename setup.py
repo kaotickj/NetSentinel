@@ -1,3 +1,5 @@
+# setup.py
+
 from setuptools import setup, find_packages
 
 setup(
@@ -15,7 +17,8 @@ setup(
         "scapy>=2.4.5",
         "colorama>=0.4.6",
         "impacket>=0.11.0",
-        "ldap3>=2.9.1"
+        "ldap3>=2.9.1",
+        "smbprotocol>=1.15.0"
     ],
     python_requires='>=3.7',
     classifiers=[
@@ -34,3 +37,4 @@ setup(
     },
     license="GPLv3"
 )
+

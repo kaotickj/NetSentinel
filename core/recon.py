@@ -1,3 +1,5 @@
+# core/recon.py
+
 import socket
 import threading
 from queue import Queue
@@ -5,20 +7,21 @@ from ipaddress import ip_network
 from typing import List, Dict, Union
 
 class NetworkScanner:
-    COMMON_PORTS = [21, 22, 23, 25, 53, 80, 88, 110, 135, 139, 143, 161, 389, 443, 445, 636, 993, 995, 1433, 1521, 1723, 3306, 3389, 5432, 5900, 8080]
+    COMMON_PORTS = [
+        21, 22, 23, 25, 53, 80, 88, 110, 135, 139, 143, 161,
+        389, 443, 445, 636, 993, 995, 1433, 1521, 1723, 3306,
+        3389, 5432, 5900, 8080
+    ]
 
-    def __init__(self, target_cidr: str, stealth: bool = True, logger=None, max_threads: int = 50, ports: List[int] = None, port_timeout: float = 1.0):
-        """
-        Initialize the NetworkScanner.
-
-        Args:
-            target_cidr (str): Target subnet or IP (e.g. "10.0.0.0/24").
-            stealth (bool): If True, scan stealthily (ping only).
-            logger: Logger instance.
-            max_threads (int): Max concurrent threads for scanning.
-            ports (List[int]): List of ports to scan if stealth=False.
-            port_timeout (float): Timeout in seconds for port connection.
-        """
+    def __init__(
+        self,
+        target_cidr: str,
+        stealth: bool = True,
+        logger=None,
+        max_threads: int = 50,
+        ports: List[int] = None,
+        port_timeout: float = 1.0,
+    ):
         self.target_cidr = target_cidr
         self.stealth = stealth
         self.logger = logger
@@ -27,7 +30,7 @@ class NetworkScanner:
         self.port_timeout = port_timeout
 
         self.hosts = self._expand_targets()
-        self.results = {}  # type: Dict[str, Dict[str, Union[str, dict, None]]]
+        self.results: Dict[str, Dict[str, Union[str, dict, None]]] = {}
         self.lock = threading.Lock()
 
     def _expand_targets(self) -> List[str]:
@@ -91,33 +94,58 @@ class NetworkScanner:
             'error': None,
         }
 
+        # Ping test
         reachable = self._ping(ip)
-        if reachable:
-            host_result['reachable'] = True
-            if self.logger:
+        host_result['reachable'] = reachable
+        if self.logger:
+            if reachable:
                 self.logger.debug(f"{ip} is reachable.")
-
-            hostname = self._resolve_hostname(ip)
-            if hostname:
-                host_result['hostname'] = hostname
-
-            if not self.stealth:
-                open_ports = self._scan_ports(ip)
-                host_result['open_ports'] = open_ports
-
-        else:
-            if self.logger:
+            else:
                 self.logger.debug(f"{ip} is not reachable.")
+
+        # Reverse DNS resolution (initial)
+        hostname = self._resolve_hostname(ip)
+        if hostname:
+            host_result['hostname'] = hostname
+            if self.logger:
+                self.logger.debug(f"Resolved {ip} → {hostname}")
+
+        # If stealth is False or reachable, scan ports
+        if not self.stealth or reachable:
+            open_ports = self._scan_ports(ip)
+            host_result['open_ports'] = open_ports
 
         with self.lock:
             self.results[ip] = host_result
+
+    def enrich_results(self):
+        if self.logger:
+            self.logger.info("Starting reverse DNS resolution on scanned hosts...")
+
+        for ip, data in self.results.items():
+            # Only try to resolve if hostname missing or empty
+            if 'hostname' not in data or not data['hostname']:
+                try:
+                    hostname = self._resolve_hostname(ip)
+                    if hostname:
+                        data['hostname'] = hostname
+                        if self.logger:
+                            self.logger.info(f"{ip} resolves to {hostname}")
+                    else:
+                        if self.logger:
+                            self.logger.info(f"No PTR record found for {ip}")
+                except Exception as e:
+                    if self.logger:
+                        self.logger.warning(f"Failed to resolve hostname for {ip}: {e}")
+
+        if self.logger:
+            self.logger.info("Reverse DNS resolution complete.")
 
     def _ping(self, ip: str, timeout: int = 1) -> bool:
         import platform
         import subprocess
 
         param = '-n' if platform.system().lower() == 'windows' else '-c'
-        # Timeout format differs on Windows vs Unix
         timeout_param = '-w' if platform.system().lower() == 'windows' else '-W'
         timeout_value = str(timeout * 1000) if platform.system().lower() == 'windows' else str(timeout)
 
@@ -135,16 +163,12 @@ class NetworkScanner:
         try:
             hostname, _, _ = socket.gethostbyaddr(ip)
             return hostname
-        except socket.herror:
+        except socket.herror as e:
+            if self.logger:
+                self.logger.debug(f"Reverse DNS failed for {ip}: {e}")
             return None
 
     def _scan_ports(self, ip: str) -> Dict[int, dict]:
-        """
-        Scan specified ports on the target IP.
-
-        Returns:
-            Dict[int, dict]: Mapping port -> info dict {state, banner}
-        """
         open_ports = {}
 
         for port in self.ports:
@@ -153,7 +177,6 @@ class NetworkScanner:
             try:
                 result = sock.connect_ex((ip, port))
                 if result == 0:
-                    # Port is open
                     banner = self._grab_banner(sock)
                     open_ports[port] = {
                         'state': 'open',
@@ -161,9 +184,6 @@ class NetworkScanner:
                     }
                     if self.logger:
                         self.logger.debug(f"{ip}:{port} is open; banner: {banner}")
-                else:
-                    if self.logger and self.logger._logger.isEnabledFor(10):  # DEBUG
-                        self.logger.debug(f"{ip}:{port} closed or filtered (connect_ex={result})")
             except Exception as e:
                 if self.logger:
                     self.logger.debug(f"Exception scanning {ip}:{port} - {e}")
@@ -173,12 +193,6 @@ class NetworkScanner:
         return open_ports
 
     def _grab_banner(self, sock: socket.socket) -> str:
-        """
-        Attempt to receive banner from an open TCP socket.
-
-        Returns:
-            str: Received banner string or empty if none.
-        """
         banner = ''
         try:
             sock.settimeout(1.0)
@@ -186,3 +200,11 @@ class NetworkScanner:
         except Exception:
             pass
         return banner
+
+    def get_banner(self, ip: str, port: int) -> str:
+        if ip in self.results:
+            open_ports = self.results[ip].get("open_ports", {})
+            if port in open_ports:
+                return open_ports[port].get("banner", "")
+        return ""
+

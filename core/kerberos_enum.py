@@ -1,15 +1,27 @@
+# core/kerberos_enum.py
+
 import socket
 import threading
 from queue import Queue
 from typing import Dict, List, Optional, Union
 import logging
+import random
+import datetime
 
 from impacket.krb5 import constants
-from impacket.krb5.kerberosv5 import KerberosError, KerberosClient
-from impacket.krb5.asn1 import AS_REP, TGS_REP
-from impacket.krb5.types import Principal
+from impacket.krb5.asn1 import (
+    AS_REQ,
+    AS_REP,
+    KDC_REQ_BODY,
+    PrincipalName,
+)
+from impacket.krb5.types import KerberosTime, Principal
+from impacket.krb5.kerberosv5 import sendReceive, KerberosError
+from pyasn1.codec.der.encoder import encode as der_encode
+from pyasn1.codec.der.decoder import decode as der_decode
 
 from ldap3 import Server, Connection, ALL, NTLM
+
 
 class KerberosScanner:
     KERBEROS_TCP_PORT = 88
@@ -40,7 +52,7 @@ class KerberosScanner:
             ldap_username, ldap_password: Credentials for LDAP connection.
         """
         self.logger = logger
-        self.domain = domain
+        self.domain = domain.upper()
         self.username = username
         self.password = password
         self.dc_ip = dc_ip
@@ -113,7 +125,6 @@ class KerberosScanner:
             self.logger.debug(f"{ip}: TCP port 88 is open.")
         else:
             self.logger.debug(f"{ip}: TCP port 88 is closed or filtered.")
-            # Without TCP Kerberos port open, deeper checks won't work; early exit
             with self.lock:
                 self.results[ip] = host_result
             return
@@ -170,21 +181,80 @@ class KerberosScanner:
 
     def _attempt_kerberos_as_req(self, ip: str) -> bool:
         """
-        Attempt AS-REQ with supplied credentials.
-
-        Returns:
-            True if ticket obtained, else False.
+        Attempt AS-REQ using the new Impacket API.
+        Returns True if ticket obtained, else False.
         """
-        from impacket.krb5.kerberosv5 import KerberosClient
         try:
-            client = KerberosClient(self.username, self.password, self.domain, ip, self.timeout)
-            client.doASRequest()
+            username = self.username
+            password = self.password
+            domain = self.domain
+            kdc_ip = ip
+            timeout = self.timeout
+
+            # Build PrincipalName
+            principal = Principal()
+            principal.nameType = constants.PrincipalNameType.NT_PRINCIPAL.value
+            principal.components = [username.encode('utf-8')]
+
+            # Build AS_REQ and KDC_REQ_BODY
+            as_req = AS_REQ()
+            as_req['pvno'] = 5
+            as_req['msg-type'] = int(constants.ApplicationTagNumbers.AS_REQ.value)
+
+            kdc_req_body = KDC_REQ_BODY()
+            kdc_req_body['kdc-options'] = constants.KDCOptions()
+            kdc_req_body['kdc-options'][0] = 1  # forwardable
+            kdc_req_body['kdc-options'][1] = 1  # renewable
+
+            # Set the client name and realm
+            kdc_req_body['cname'] = PrincipalName()
+            kdc_req_body['cname']['name-type'] = principal.nameType
+            kdc_req_body['cname']['name-string'] = [username]
+
+            kdc_req_body['realm'] = domain
+
+            # Set server principal (krbtgt)
+            kdc_req_body['sname'] = PrincipalName()
+            kdc_req_body['sname']['name-type'] = constants.PrincipalNameType.NT_SRV_INST.value
+            kdc_req_body['sname']['name-string'] = ['krbtgt', domain]
+
+            # Set requested encryption types (e.g., AES256, AES128)
+            kdc_req_body['etype'] = [int(constants.EncryptionType.aes256_cts_hmac_sha1_96.value),
+                                    int(constants.EncryptionType.aes128_cts_hmac_sha1_96.value),
+                                    int(constants.EncryptionType.rc4_hmac.value)]
+
+            # Set time fields
+            now = datetime.datetime.utcnow()
+            kdc_req_body['from'] = KerberosTime.to_asn1(now)
+            kdc_req_body['till'] = KerberosTime.to_asn1(now + datetime.timedelta(hours=10))
+            kdc_req_body['rtime'] = KerberosTime.to_asn1(now + datetime.timedelta(hours=10))
+
+            # Set nonce
+            kdc_req_body['nonce'] = random.getrandbits(31)
+
+            # No addresses
+            kdc_req_body['addresses'] = None
+
+            as_req['req-body'] = kdc_req_body
+
+            # Encode request
+            message = der_encode(as_req)
+
+            # Send request and receive response
+            response = sendReceive(message, kdc_ip, timeout=timeout)
+
+            # Decode response
+            rep = der_decode(response, asn1Spec=AS_REP())[0]
+
+            # If decode succeeds, return True
             return True
+
         except KerberosError as e:
             self.logger.debug(f"AS-REQ failed: {e}")
             return False
+
         except Exception as e:
-            self.logger.debug(f"Kerberos client exception: {e}")
+            self.logger.debug(f"Exception in AS-REQ: {e}")
             return False
 
     def _detect_as_rep_roast(self, ip: str, users: List[str]) -> List[str]:
@@ -198,35 +268,92 @@ class KerberosScanner:
         Returns:
             List of usernames vulnerable to AS-REP roasting.
         """
-        from impacket.krb5.kerberosv5 import KerberosClient
-        vulnerable_users = []
+        roastable_users = []
+
         for user in users:
             try:
-                client = KerberosClient(user, '', self.domain, ip, self.timeout)
-                client.doASRequest()
+                # Build AS-REQ without pre-auth for this user
+                principal = Principal()
+                principal.nameType = constants.PrincipalNameType.NT_PRINCIPAL.value
+                principal.components = [user.encode('utf-8')]
+
+                as_req = AS_REQ()
+                as_req['pvno'] = 5
+                as_req['msg-type'] = int(constants.ApplicationTagNumbers.AS_REQ.value)
+
+                kdc_req_body = KDC_REQ_BODY()
+                kdc_req_body['kdc-options'] = constants.KDCOptions()
+                kdc_req_body['kdc-options'][0] = 1  # forwardable
+                kdc_req_body['kdc-options'][1] = 1  # renewable
+
+                kdc_req_body['cname'] = PrincipalName()
+                kdc_req_body['cname']['name-type'] = principal.nameType
+                kdc_req_body['cname']['name-string'] = [user]
+
+                kdc_req_body['realm'] = self.domain
+
+                kdc_req_body['sname'] = PrincipalName()
+                kdc_req_body['sname']['name-type'] = constants.PrincipalNameType.NT_SRV_INST.value
+                kdc_req_body['sname']['name-string'] = ['krbtgt', self.domain]
+
+                kdc_req_body['etype'] = [int(constants.EncryptionType.aes256_cts_hmac_sha1_96.value),
+                                        int(constants.EncryptionType.aes128_cts_hmac_sha1_96.value),
+                                        int(constants.EncryptionType.rc4_hmac.value)]
+
+                now = datetime.datetime.utcnow()
+                kdc_req_body['from'] = KerberosTime.to_asn1(now)
+                kdc_req_body['till'] = KerberosTime.to_asn1(now + datetime.timedelta(hours=10))
+                kdc_req_body['rtime'] = KerberosTime.to_asn1(now + datetime.timedelta(hours=10))
+
+                kdc_req_body['nonce'] = random.getrandbits(31)
+
+                kdc_req_body['addresses'] = None
+
+                as_req['req-body'] = kdc_req_body
+
+                message = der_encode(as_req)
+
+                # Send request and get response
+                sendReceive(message, ip, timeout=self.timeout)
+
             except KerberosError as e:
-                # Error code for AS-REP roast is KRB5KDC_ERR_PREAUTH_REQUIRED (24)
+                # Error code KDC_ERR_PREAUTH_REQUIRED == 24
                 if hasattr(e, 'error_code') and e.error_code == constants.ErrorCodes.KDC_ERR_PREAUTH_REQUIRED.value:
-                    continue  # User requires pre-auth, skip
+                    # User requires pre-auth, so skip
+                    continue
                 else:
-                    # If no preauth error, user might be roastable
-                    vulnerable_users.append(user)
+                    # No pre-auth required - vulnerable user
+                    roastable_users.append(user)
+
             except Exception:
-                vulnerable_users.append(user)
-        return vulnerable_users
+                # Other errors, treat user as vulnerable (conservative)
+                roastable_users.append(user)
+
+        return roastable_users
 
     def _kerberoast(self, ip: str) -> List[Dict[str, Union[str, int]]]:
         """
         Kerberoastable SPN enumeration: enumerate SPNs and request TGS tickets.
 
+        NOTE: This simplified version only enumerates SPNs via LDAP.
+        Requesting TGS tickets would require full TGS-REQ construction.
+
         Returns:
             List of dicts containing 'spn' and 'username'.
         """
-        # NOTE: Implementing this properly requires LDAP queries to get SPNs.
-        # For this example, we simulate it as empty list.
-        # To fully implement: LDAP query for servicePrincipalName attribute, then TGS requests.
-        self.logger.debug(f"Kerberoast enumeration not implemented fully - requires LDAP integration.")
-        return []
+        self.logger.debug(f"Kerberoast enumeration placeholder called for {ip}.")
+        if not (self.ldap_username and self.ldap_password):
+            self.logger.debug("LDAP credentials not provided; skipping SPN enumeration.")
+            return []
+
+        try:
+            ldap_data = self._ldap_enumerate(ip)
+            spns = ldap_data.get('spns', [])
+            # Return as list of dicts with 'spn' key only, since TGS-REQ not implemented
+            return [{'spn': spn} for spn in spns]
+        except Exception as e:
+            self.logger.warning(f"{ip}: Kerberoast LDAP enumeration failed: {e}")
+            return []
 
     def _ldap_enumerate(self, ip: str) -> Dict:
         """
@@ -241,7 +368,6 @@ class KerberosScanner:
         user = f"{self.ldap_username}@{self.domain}" if '@' not in self.ldap_username else self.ldap_username
         conn = Connection(server, user=user, password=self.ldap_password, authentication=NTLM, auto_bind=True)
 
-        # Search base: root of domain
         base_dn = ','.join([f"DC={part}" for part in self.domain.split('.')])
 
         results = {
@@ -274,3 +400,4 @@ class KerberosScanner:
 
         conn.unbind()
         return results
+

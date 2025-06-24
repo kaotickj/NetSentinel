@@ -1,38 +1,71 @@
 # core/smb_enum.py
 
-from impacket.smbconnection import SMBConnection
-from utils.logger import Logger
-import socket
+import logging
+from impacket.smbconnection import SMBConnection, SessionError
 
 class SMBEnumerator:
-    def __init__(self, logger: Logger):
-        self.logger = logger
+    def __init__(self, target_ip, domain, logger=None):
+        self.target_ip = target_ip
+        self.domain = domain
+        self.logger = logger or logging.getLogger(__name__)
+        self.connection = None
 
-    def try_anonymous_login(self, ip):
+        # Try to establish initial anonymous connection
         try:
-            conn = SMBConnection(ip, ip, timeout=3)
-            conn.login('', '')  # Anonymous login attempt
-            shares = conn.listShares()
-            share_list = []
-            for share in shares:
-                share_name = share['shi1_netname'][:-1]  # Trim null terminator
-                share_remark = share['shi1_remark'][:-1]
-                share_list.append({
-                    'name': share_name,
-                    'remark': share_remark
-                })
-                self.logger.success(f"[{ip}] Found share: {share_name} - {share_remark}")
-            conn.logoff()
-            return share_list
+            self.connection = SMBConnection(self.target_ip, self.target_ip, sess_port=445, timeout=10)
+            self.connection.login('', '')  # anonymous login attempt
+            self.logger.info(f"Anonymous SMB connection established to {self.target_ip}")
         except Exception as e:
-            self.logger.debug(f"[{ip}] SMB anonymous login failed or no shares: {str(e)}")
-            return None
+            self.logger.error(f"Failed to establish SMB connection: {e}")
+            self.connection = None
 
-    def enumerate(self, host_list):
-        self.logger.info("Starting SMB share enumeration...")
-        for host in host_list:
-            ip = host.get('ip')
-            self.logger.debug(f"Probing SMB on {ip}")
-            shares = self.try_anonymous_login(ip)
-            if shares:
-                host['smb_shares'] = shares
+    def enumerate_shares(self):
+        """
+        Enumerate SMB shares on the target.
+        Returns a list of share names.
+        Raises exception if connection is not established.
+        """
+        if not self.connection:
+            raise ConnectionError("No SMB connection established")
+
+        shares = []
+        try:
+            for share in self.connection.listShares():
+                shares.append(share['shi1_netname'].decode('utf-8').rstrip('\x00'))
+            self.logger.info(f"Enumerated {len(shares)} shares on {self.target_ip}")
+            return shares
+        except SessionError as e:
+            self.logger.error(f"SMB session error while enumerating shares: {e}")
+            return []
+        except Exception as e:
+            self.logger.error(f"Unexpected error enumerating SMB shares: {e}")
+            return []
+
+    def try_login(self, username, password):
+        """
+        Attempt SMB login with provided username and password.
+        Returns True if successful, False otherwise.
+        """
+        if not self.connection:
+            self.logger.error("No SMB connection available for login attempts")
+            return False
+
+        try:
+            self.connection.logoff()
+        except Exception:
+            pass  # ignore errors on logoff
+
+        try:
+            # Create a new SMB connection per login attempt
+            conn = SMBConnection(self.target_ip, self.target_ip, sess_port=445, timeout=10)
+            conn.login(username, password, domain=self.domain)
+            self.logger.debug(f"SMB login succeeded for {username}@{self.domain}")
+            conn.logoff()
+            return True
+        except SessionError as e:
+            self.logger.debug(f"SMB login failed for {username}@{self.domain}: {e}")
+            return False
+        except Exception as e:
+            self.logger.warning(f"Error during SMB login attempt for {username}@{self.domain}: {e}")
+            return False
+
