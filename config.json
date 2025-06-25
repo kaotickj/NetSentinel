@@ -1,7 +1,7 @@
 {
   "domain": "lab.local",
-  "username": "Administrator",
-  "password": "K@otickEvil69",
+  "username": "user",
+  "password": "password",
   "dc_ip": "10.0.2.8",
   "ldap_username": "ldapuser",
   "ldap_password": "ldappass"

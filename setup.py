@@ -10,7 +10,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Kaotick Jay",
     author_email="kaotickj@protonmail.com",
-    url="https://github.com/kaotickj/netsentinel",
+    url="https://github.com/kaotickj/NetSentinel",
     packages=find_packages(exclude=["tests*", "examples*", "docs*"]),
     include_package_data=True,
     install_requires=[
@@ -18,7 +18,8 @@ setup(
         "colorama>=0.4.6",
         "impacket>=0.11.0",
         "ldap3>=2.9.1",
-        "smbprotocol>=1.15.0"
+        "smbprotocol>=1.15.0",
+        "pyfiglet>=0.8.post1"
     ],
     python_requires='>=3.7',
     classifiers=[
