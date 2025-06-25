@@ -6,56 +6,62 @@ from datetime import datetime
 from utils import Logger, Config, COMMON_TCP_PORTS, parse_ports, generate_html_report
 from core import NetworkScanner, SMBEnumerator, KerberosScanner
 
+
 def load_user_list(path):
     with open(path, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
+
 
 def load_password_list(path):
     with open(path, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
-def smb_password_spray(target_ip, domain, user_list, password_list, logger, delay=1):
+
+def smb_password_spray(target_ip, domain, user_list, password_list, logger, delay=0, max_threads=20):
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
     import time
+
     successes = []
     failures = []
+    lock = threading.Lock()
 
     smb_enum = SMBEnumerator(target_ip, domain, logger)
 
-    no_connection_fail_count = 0
-    max_no_conn_failures = 3  # Threshold for early stopping
+    if smb_enum.connection is None:
+        logger.error("No SMB connection available. Aborting spray.")
+        return successes, failures
 
-    for username in user_list:
-        for password in password_list:
-            if smb_enum.connection is None:
-                logger.error("No SMB connection available, stopping password spray.")
-                return successes, failures
-
-            logger.debug(f"Trying {username}:{password}")
-            try:
-                success = smb_enum.try_login(username, password)
+    def try_credential(username, password):
+        nonlocal smb_enum
+        try:
+            logger.info(f"[SPRAY] Trying {username}@{domain}:{password}")
+            success = smb_enum.try_login(username, password)
+            with lock:
                 if success:
                     logger.info(f"SUCCESS: {username}:{password}")
                     successes.append((username, password))
-                    no_connection_fail_count = 0
-                    break
                 else:
                     failures.append((username, password))
-                    no_connection_fail_count = 0
-            except Exception as e:
-                err_msg = str(e).lower()
-                if "no smb connection" in err_msg or smb_enum.connection is None:
-                    no_connection_fail_count += 1
-                    logger.error(f"No SMB connection available for login attempts (failure count: {no_connection_fail_count})")
-                    if no_connection_fail_count >= max_no_conn_failures:
-                        logger.error("Repeated connection failures detected, stopping password spray early.")
-                        return successes, failures
-                else:
-                    no_connection_fail_count = 0
+        except Exception as e:
+            with lock:
                 logger.warning(f"Error during login attempt for {username}:{password} - {e}")
+                failures.append((username, password))
 
+        if delay:
             time.sleep(delay)
 
+    with ThreadPoolExecutor(max_workers=max_threads) as executor:
+        futures = []
+        for username in user_list:
+            for password in password_list:
+                futures.append(executor.submit(try_credential, username, password))
+
+        for future in as_completed(futures):
+            _ = future.result()  # Wait for all threads to finish
+
     return successes, failures
+
 
 def main():
     parser = argparse.ArgumentParser(description="NetSentinel Network Recon Tool")
@@ -121,9 +127,11 @@ def main():
         import pprint
         logger.debug(f"Scanner raw results:\n{pprint.pformat(results)}")
 
-    open_ports = results.get(target_ip, {}).get("open_ports", [])
-    if open_ports:
-        logger.info(f"Open ports on {target_ip}: {open_ports}")
+    open_ports = results.get(target_ip, {}).get("open_ports", {})
+    open_ports_list = list(open_ports.keys()) if isinstance(open_ports, dict) else []
+
+    if open_ports_list:
+        logger.info(f"Open ports on {target_ip}: {open_ports_list}")
     else:
         logger.warning(f"No open ports detected on {target_ip}.")
 
@@ -175,13 +183,13 @@ def main():
         "hostname": hostname,
         "ports": [
             {"port": p, "status": "Open", "banner": scanner.get_banner(target_ip, p)}
-            for p in open_ports
+            for p in open_ports_list
         ],
         "smb_shares": smb_shares,
         "kerberos_info": kerberos_info,
         "password_spray_successes": password_spray_successes,
         "password_spray_failures": password_spray_failures,
-        "scan_time": datetime.now(),
+        "scan_time": datetime.now().isoformat(),
     }
 
     if args.html_report:
@@ -192,6 +200,7 @@ def main():
             logger.error(f"Failed to generate HTML report: {e}")
 
     logger.success("NetSentinel recon complete.")
+
 
 if __name__ == "__main__":
     main()
