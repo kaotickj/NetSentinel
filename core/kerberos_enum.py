@@ -21,6 +21,8 @@ from pyasn1.codec.der.encoder import encode as der_encode
 from pyasn1.codec.der.decoder import decode as der_decode
 
 from ldap3 import Server, Connection, ALL, NTLM
+from ldap3.core.exceptions import LDAPException
+
 
 
 class KerberosScanner:
@@ -134,21 +136,33 @@ class KerberosScanner:
             host_result['kerberos_udp_88_open'] = True
 
         # AS-REQ ticket request test (if credentials supplied)
+        as_req_success = False
         if self.username and self.password:
             try:
-                can_request = self._attempt_kerberos_as_req(ip)
-                host_result['can_request_as_req'] = can_request
+                as_req_success = self._attempt_kerberos_as_req(ip)
+                host_result['can_request_as_req'] = as_req_success
             except Exception as e:
                 self.logger.warning(f"{ip}: AS-REQ attempt failed: {e}")
 
-            # AS-REP Roasting detection
-            if user_list:
+        # AS-REP Roasting detection
+        roastable = []
+        if user_list:
+            try:
                 roastable = self._detect_as_rep_roast(ip, user_list)
                 host_result['as_rep_roastable_users'] = roastable
+                # If any roastable users found, consider as_req successful as well
+                if roastable:
+                    host_result['can_request_as_req'] = True
+            except Exception as e:
+                self.logger.warning(f"{ip}: AS-REP roasting detection failed: {e}")
 
-            # Kerberoasting (SPN enumeration + TGS requests)
+        # Kerberoasting (SPN enumeration + TGS requests placeholder)
+        spns = []
+        try:
             spns = self._kerberoast(ip)
             host_result['kerberoastable_spns'] = spns
+        except Exception as e:
+            self.logger.warning(f"{ip}: Kerberoast enumeration failed: {e}")
 
         # LDAP Enumeration (optional, requires ldap_username/password)
         if self.ldap_username and self.ldap_password:
@@ -325,34 +339,74 @@ class KerberosScanner:
                     # No pre-auth required - vulnerable user
                     roastable_users.append(user)
 
-            except Exception:
-                # Other errors, treat user as vulnerable (conservative)
+            except Exception as e:
+                # Other errors - conservative approach: treat as vulnerable but log debug
+                self.logger.debug(f"{ip}: Unexpected error testing user {user} for AS-REP roasting: {e}")
                 roastable_users.append(user)
 
         return roastable_users
 
     def _kerberoast(self, ip: str) -> List[Dict[str, Union[str, int]]]:
         """
-        Kerberoastable SPN enumeration: enumerate SPNs and request TGS tickets.
-
-        NOTE: This simplified version only enumerates SPNs via LDAP.
-        Requesting TGS tickets would require full TGS-REQ construction.
+        Perform SPN enumeration and send TGS requests for Kerberoasting.
 
         Returns:
-            List of dicts containing 'spn' and 'username'.
+            List of dicts with SPN and TGS ticket bytes (in hex).
         """
-        self.logger.debug(f"Kerberoast enumeration placeholder called for {ip}.")
+        self.logger.debug(f"{ip}: Starting Kerberoast SPN enumeration.")
+
         if not (self.ldap_username and self.ldap_password):
-            self.logger.debug("LDAP credentials not provided; skipping SPN enumeration.")
+            self.logger.debug(f"{ip}: LDAP credentials not provided; skipping SPN enumeration.")
             return []
 
         try:
             ldap_data = self._ldap_enumerate(ip)
             spns = ldap_data.get('spns', [])
-            # Return as list of dicts with 'spn' key only, since TGS-REQ not implemented
-            return [{'spn': spn} for spn in spns]
+
+            if not spns:
+                self.logger.debug(f"{ip}: No SPNs found via LDAP.")
+                return []
+
+            roastable = []
+
+            from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
+            from impacket.krb5.types import Principal
+
+            # Build TGT once per enumeration run
+            tgt, cipher, session_key = getKerberosTGT(
+                self.ldap_username,
+                self.ldap_password,
+                self.domain,
+                ip
+            )
+
+            for spn in spns:
+                try:
+                    tgs, cipher, session_key = getKerberosTGS(
+                        spn,
+                        self.domain,
+                        tgt,
+                        cipher,
+                        session_key,
+                        ip
+                    )
+
+                    enc_data = tgs['ticket']['enc-part']['cipher']
+                    tgs_hash = enc_data.asOctets().hex()
+
+                    roastable.append({
+                        'spn': spn,
+                        'ticket': tgs_hash
+                    })
+
+                except Exception as e:
+                    self.logger.debug(f"{ip}: Failed to get TGS for SPN {spn}: {e}")
+                    continue
+
+            return roastable
+
         except Exception as e:
-            self.logger.warning(f"{ip}: Kerberoast LDAP enumeration failed: {e}")
+            self.logger.warning(f"{ip}: Full Kerberoast enumeration failed: {e}")
             return []
 
     def _ldap_enumerate(self, ip: str) -> Dict:
@@ -364,40 +418,54 @@ class KerberosScanner:
         Returns:
             Dict with keys: 'users', 'groups', 'spns' each mapping to lists.
         """
-        server = Server(ip, get_info=ALL, connect_timeout=self.timeout)
-        user = f"{self.ldap_username}@{self.domain}" if '@' not in self.ldap_username else self.ldap_username
-        conn = Connection(server, user=user, password=self.ldap_password, authentication=NTLM, auto_bind=True)
+        try:
+            server = Server(ip, get_info=ALL, connect_timeout=self.timeout)
+            user = self.ldap_username
+            if '@' not in user:
+                user = f"{user}@{self.domain}"
+            conn = Connection(server, user=user, password=self.ldap_password, authentication=NTLM, auto_bind=True)
 
-        base_dn = ','.join([f"DC={part}" for part in self.domain.split('.')])
+            base_dn = ','.join([f"DC={part}" for part in self.domain.split('.')])
 
-        results = {
-            'users': [],
-            'groups': [],
-            'spns': [],
-        }
+            results = {
+                'users': [],
+                'groups': [],
+                'spns': [],
+            }
 
-        # Enumerate users
-        conn.search(search_base=base_dn,
-                    search_filter='(&(objectClass=user)(objectCategory=person))',
-                    attributes=['sAMAccountName', 'userPrincipalName'])
-        for entry in conn.entries:
-            results['users'].append(str(entry.sAMAccountName))
+            # Enumerate users
+            conn.search(search_base=base_dn,
+                        search_filter='(&(objectClass=user)(objectCategory=person))',
+                        attributes=['sAMAccountName', 'userPrincipalName'])
+            for entry in conn.entries:
+                results['users'].append(str(entry.sAMAccountName))
 
-        # Enumerate groups
-        conn.search(search_base=base_dn,
-                    search_filter='(objectClass=group)',
-                    attributes=['cn'])
-        for entry in conn.entries:
-            results['groups'].append(str(entry.cn))
+            # Enumerate groups
+            conn.search(search_base=base_dn,
+                        search_filter='(objectClass=group)',
+                        attributes=['cn'])
+            for entry in conn.entries:
+                results['groups'].append(str(entry.cn))
 
-        # Enumerate SPNs (servicePrincipalName attribute)
-        conn.search(search_base=base_dn,
-                    search_filter='(servicePrincipalName=*)',
-                    attributes=['servicePrincipalName'])
-        for entry in conn.entries:
-            spns = entry.servicePrincipalName.values if hasattr(entry.servicePrincipalName, 'values') else []
-            results['spns'].extend(spns)
+            # Enumerate SPNs (servicePrincipalName attribute)
+            conn.search(search_base=base_dn,
+                        search_filter='(servicePrincipalName=*)',
+                        attributes=['servicePrincipalName'])
+            for entry in conn.entries:
+                spns = []
+                if hasattr(entry.servicePrincipalName, 'values'):
+                    spns = entry.servicePrincipalName.values
+                elif isinstance(entry.servicePrincipalName, list):
+                    spns = entry.servicePrincipalName
+                results['spns'].extend(spns)
 
-        conn.unbind()
-        return results
+            conn.unbind()
+            return results
+
+        except LDAPException as e:
+            self.logger.warning(f"{ip}: LDAP connection or search failed: {e}")
+            return {'users': [], 'groups': [], 'spns': []}
+        except Exception as e:
+            self.logger.warning(f"{ip}: Unexpected LDAP error: {e}")
+            return {'users': [], 'groups': [], 'spns': []}
 

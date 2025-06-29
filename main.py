@@ -1,5 +1,7 @@
 # main.py
 
+import os
+import webbrowser
 import ipaddress
 import argparse
 import json
@@ -8,6 +10,7 @@ from utils import Logger, Config, COMMON_TCP_PORTS, parse_ports, generate_html_r
 from core import NetworkScanner, SMBEnumerator, KerberosScanner
 import time
 import pyfiglet
+from colorama import init, Fore, Style
 
 
 def load_user_list(path):
@@ -66,10 +69,12 @@ def smb_password_spray(target_ip, domain, user_list, password_list, logger, dela
 
 
 def main():
-    ascii_title = pyfiglet.figlet_format("NetSentinel")
+    init(autoreset=True)  # Initialize colorama for colored output
 
+    ascii_title = pyfiglet.figlet_format("NetSentinel", font="slant")
+    colored_title = f"{Fore.MAGENTA}{ascii_title}{Style.RESET_ALL}"
     parser = argparse.ArgumentParser(
-        description=ascii_title + "\nNetwork Recon Tool by Kaotick Jay.\n\nNetSentinel is a Python-based red team reconnaissance framework designed for stealthy internal enumeration, service discovery, and lateral movement preparation. ",
+        description=colored_title + "\nNetwork Recon Tool by Kaotick Jay.\n\nNetSentinel is a Python-based red team reconnaissance framework designed for stealthy internal enumeration, service discovery, and lateral movement preparation.",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--target", required=True, help="Target IP or CIDR (e.g., 192.168.1.0/24 or 10.0.0.1)")
@@ -250,8 +255,22 @@ def main():
 
     if args.html_report:
         try:
-            generate_html_report(summary_report, args.html_report)
-            logger.info(f"HTML report generated at {args.html_report}")
+            # Enforce .html extension if missing
+            html_path = args.html_report
+            if not html_path.lower().endswith(".html"):
+                html_path += ".html"
+            html_path = os.path.abspath(html_path)
+
+            generate_html_report(summary_report, html_path)
+            logger.info(f"HTML report generated at {html_path}")
+
+            # Attempt to open in the system's default web browser
+            try:
+                webbrowser.open(f"file://{html_path}")
+                logger.debug("Opened HTML report in default system browser.")
+            except Exception as e:
+                logger.warning(f"Could not open browser automatically: {e}")
+
         except Exception as e:
             logger.error(f"Failed to generate HTML report: {e}")
 

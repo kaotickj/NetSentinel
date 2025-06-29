@@ -1,7 +1,44 @@
-# utils/html_report.py
-
 from datetime import datetime
 import html
+
+def format_kerberos_info(kerberos_info: dict) -> str:
+    """
+    Format Kerberos info dict into a readable HTML table.
+    """
+    if not kerberos_info:
+        return "<p>No Kerberos info available or enumeration skipped.</p>"
+
+    rows = []
+    for key, val in kerberos_info.items():
+        # Format values based on type for readability
+        if isinstance(val, bool):
+            display_val = "Yes" if val else "No"
+        elif isinstance(val, list):
+            if val:
+                display_val = "<br>".join(html.escape(str(x)) for x in val)
+            else:
+                display_val = "<i>None</i>"
+        elif isinstance(val, dict):
+            if val:
+                # Show key: value pairs in dict on separate lines
+                display_val = "<br>".join(f"{html.escape(str(k))}: {html.escape(str(v))}" for k, v in val.items())
+            else:
+                display_val = "<i>None</i>"
+        elif val is None:
+            display_val = "<i>None</i>"
+        else:
+            display_val = html.escape(str(val))
+
+        rows.append(f"<tr><td>{html.escape(key.replace('_', ' ').capitalize())}</td><td>{display_val}</td></tr>")
+
+    return f"""
+    <table>
+        <thead><tr><th>Host</th><th>Result</th></tr></thead>
+        <tbody>
+            {''.join(rows)}
+        </tbody>
+    </table>
+    """
 
 def generate_html_report(scan_results: dict, output_path: str):
     """
@@ -70,9 +107,7 @@ def generate_html_report(scan_results: dict, output_path: str):
         if smb_shares:
             smb_html = "<ul>" + "".join(f"<li>{esc(s)}</li>" for s in smb_shares) + "</ul>"
 
-        kerberos_html = "<p>No Kerberos info available or enumeration skipped.</p>"
-        if kerberos_info:
-            kerberos_html = "<ul>" + "".join(f"<li>{esc(k)}: {esc(v)}</li>" for k, v in kerberos_info.items()) + "</ul>"
+        kerberos_html = format_kerberos_info(kerberos_info)
 
         spray_success_html = "<p>No successful password spraying attempts.</p>"
         if spray_successes:

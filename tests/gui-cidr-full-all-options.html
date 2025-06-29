@@ -1,0 +1,146 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>NetSentinel Scan Report - 10.0.2.0/24</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #1e1e1e; color: #ccc; }
+            table { border-collapse: collapse; width: 90%; margin-bottom: 20px; }
+            th, td { border: 1px solid #666; padding: 8px; text-align: left; }
+            th { background-color: #333; color: #66ccff; }
+            h1, h2, h3, h4 { color: #66ccff; }
+            summary { cursor: pointer; font-weight: bold; margin-top: 10px; }
+            details { margin-bottom: 20px; border: 1px solid #444; padding: 10px; background-color: #2a2a2a; }
+            footer { font-size: 0.9em; color: #888; margin-top: 30px; }
+        </style>
+    </head>
+    <body>
+        <h1>NetSentinel Scan Report</h1>
+        <p><strong>Scan started:</strong> 2025-06-28T18:25:19.591848</p>
+        <p><strong>Scan ended:</strong> 2025-06-28T18:31:07.753285</p>
+        <p><strong>Network Range:</strong> 10.0.2.0/24</p>
+        <p><strong>Hosts Scanned:</strong> 254</p>
+        <p><strong>Scan Duration:</strong> 5m 48s</p>
+
+        <p><strong>250</strong> host(s) with 0 open ports.</p>
+
+        <h2>Scan Results Per Host</h2>
+        
+        <details>
+            <summary><strong>10.0.2.1</strong> — 3 port(s) open (click to expand)</summary>
+            <h3>Hostname: </h3>
+            <p><em>Scan started:</em> 2025-06-28T18:25:19.591869 | <em>Scan ended:</em> 2025-06-28T18:25:48.768981 | <em>Duration:</em> 0m 29s</p>
+
+            <h4>Open Ports</h4>
+            <table>
+                <thead><tr><th>Port</th><th>Status</th><th>Banner</th></tr></thead>
+                <tbody><tr><td>80</td><td>Open</td><td></td></tr>
+<tr><td>139</td><td>Open</td><td></td></tr>
+<tr><td>445</td><td>Open</td><td></td></tr></tbody>
+            </table>
+
+            <h4>SMB Shares</h4>
+            <ul><li>IPC$</li></ul>
+
+            <h4>Kerberos Info</h4>
+            <ul><li>10.0.2.1: {&#x27;kerberos_tcp_88_open&#x27;: False, &#x27;kerberos_udp_88_open&#x27;: False, &#x27;can_request_as_req&#x27;: False, &#x27;as_rep_roastable_users&#x27;: [], &#x27;kerberoastable_spns&#x27;: [], &#x27;ldap_enumeration&#x27;: {}, &#x27;error&#x27;: None}</li></ul>
+
+            <h4>Password Spray - Successes</h4>
+            <p>No successful password spraying attempts.</p>
+
+            <h4>Password Spray - Failures</h4>
+            <p>No failed password spraying attempts recorded.</p>
+        </details>
+        
+        <details>
+            <summary><strong>10.0.2.11</strong> — 3 port(s) open (click to expand)</summary>
+            <h3>Hostname: </h3>
+            <p><em>Scan started:</em> 2025-06-28T18:25:57.303947 | <em>Scan ended:</em> 2025-06-28T18:26:00.587940 | <em>Duration:</em> 0m 3s</p>
+
+            <h4>Open Ports</h4>
+            <table>
+                <thead><tr><th>Port</th><th>Status</th><th>Banner</th></tr></thead>
+                <tbody><tr><td>80</td><td>Open</td><td></td></tr>
+<tr><td>139</td><td>Open</td><td></td></tr>
+<tr><td>445</td><td>Open</td><td></td></tr></tbody>
+            </table>
+
+            <h4>SMB Shares</h4>
+            <ul><li>IPC$</li></ul>
+
+            <h4>Kerberos Info</h4>
+            <ul><li>10.0.2.11: {&#x27;kerberos_tcp_88_open&#x27;: False, &#x27;kerberos_udp_88_open&#x27;: False, &#x27;can_request_as_req&#x27;: False, &#x27;as_rep_roastable_users&#x27;: [], &#x27;kerberoastable_spns&#x27;: [], &#x27;ldap_enumeration&#x27;: {}, &#x27;error&#x27;: None}</li></ul>
+
+            <h4>Password Spray - Successes</h4>
+            <p>No successful password spraying attempts.</p>
+
+            <h4>Password Spray - Failures</h4>
+            <p>No failed password spraying attempts recorded.</p>
+        </details>
+        
+        <details>
+            <summary><strong>10.0.2.15</strong> — 7 port(s) open (click to expand)</summary>
+            <h3>Hostname: lab.local</h3>
+            <p><em>Scan started:</em> 2025-06-28T18:26:03.273890 | <em>Scan ended:</em> 2025-06-28T18:26:31.378305 | <em>Duration:</em> 0m 28s</p>
+
+            <h4>Open Ports</h4>
+            <table>
+                <thead><tr><th>Port</th><th>Status</th><th>Banner</th></tr></thead>
+                <tbody><tr><td>53</td><td>Open</td><td></td></tr>
+<tr><td>88</td><td>Open</td><td></td></tr>
+<tr><td>135</td><td>Open</td><td></td></tr>
+<tr><td>139</td><td>Open</td><td></td></tr>
+<tr><td>389</td><td>Open</td><td></td></tr>
+<tr><td>445</td><td>Open</td><td></td></tr>
+<tr><td>636</td><td>Open</td><td></td></tr></tbody>
+            </table>
+
+            <h4>SMB Shares</h4>
+            <ul><li>ADMIN$</li><li>C$</li><li>HR_Backups</li><li>IPC$</li><li>Logs</li><li>NETLOGON</li><li>Passwords</li><li>PublicTools</li><li>Shares</li><li>SYSVOL</li><li>Users</li></ul>
+
+            <h4>Kerberos Info</h4>
+            <ul><li>10.0.2.15: {&#x27;kerberos_tcp_88_open&#x27;: True, &#x27;kerberos_udp_88_open&#x27;: False, &#x27;can_request_as_req&#x27;: False, &#x27;as_rep_roastable_users&#x27;: [], &#x27;kerberoastable_spns&#x27;: [], &#x27;ldap_enumeration&#x27;: {&#x27;users&#x27;: [], &#x27;groups&#x27;: [], &#x27;spns&#x27;: []}, &#x27;error&#x27;: None}</li></ul>
+
+            <h4>Password Spray - Successes</h4>
+            <p>No successful password spraying attempts.</p>
+
+            <h4>Password Spray - Failures</h4>
+            <p>No failed password spraying attempts recorded.</p>
+        </details>
+        
+        <details>
+            <summary><strong>10.0.2.16</strong> — 4 port(s) open (click to expand)</summary>
+            <h3>Hostname: </h3>
+            <p><em>Scan started:</em> 2025-06-28T18:26:31.378345 | <em>Scan ended:</em> 2025-06-28T18:27:00.536869 | <em>Duration:</em> 0m 29s</p>
+
+            <h4>Open Ports</h4>
+            <table>
+                <thead><tr><th>Port</th><th>Status</th><th>Banner</th></tr></thead>
+                <tbody><tr><td>135</td><td>Open</td><td></td></tr>
+<tr><td>139</td><td>Open</td><td></td></tr>
+<tr><td>445</td><td>Open</td><td></td></tr>
+<tr><td>3389</td><td>Open</td><td></td></tr></tbody>
+            </table>
+
+            <h4>SMB Shares</h4>
+            <p>No SMB shares found or enumeration skipped.</p>
+
+            <h4>Kerberos Info</h4>
+            <ul><li>10.0.2.16: {&#x27;kerberos_tcp_88_open&#x27;: False, &#x27;kerberos_udp_88_open&#x27;: False, &#x27;can_request_as_req&#x27;: False, &#x27;as_rep_roastable_users&#x27;: [], &#x27;kerberoastable_spns&#x27;: [], &#x27;ldap_enumeration&#x27;: {}, &#x27;error&#x27;: None}</li></ul>
+
+            <h4>Password Spray - Successes</h4>
+            <p>No successful password spraying attempts.</p>
+
+            <h4>Password Spray - Failures</h4>
+            <p>No failed password spraying attempts recorded.</p>
+        </details>
+        
+
+        <hr>
+        <footer>
+            <p>Report generated on 2025-06-28 18:31:07</p>
+        </footer>
+    </body>
+    </html>
+    
