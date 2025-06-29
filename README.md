@@ -59,6 +59,72 @@ pip install -r requirements.txt
 
 ---
 
+## Python Runtime Requirement
+
+---
+
+### Prerequisites
+
+* **Python Interpreter Required:**
+  The NetSentinel executables for both Windows and Linux **require a Python runtime environment installed on the target system**. This is because the GUI launcher (`NetSentinel_GUI.exe` / `NetSentinel_GUI` binary) internally runs the Python scanning script (`main.py`) by invoking `python` or `python3` through the system path.
+
+* **Supported Python Versions:**
+  It is recommended to have **Python 3.7 or newer** installed and accessible via your system's `PATH` environment variable as either `python` (Windows) or `python3` (Linux/macOS). The GUI automatically detects and uses the available Python executable.
+
+* **Installation Instructions:**
+
+  * **Windows:**
+    Install Python from the official source: [https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/)
+    Ensure during installation that the option **“Add Python to PATH”** is checked.
+
+  * **Linux:**
+    Most distributions ship with Python 3 installed. If not, install it using your package manager:
+    For Debian/Ubuntu-based systems:
+
+    ```bash
+    sudo apt-get update
+    sudo apt-get install python3
+    ```
+
+    For RedHat/CentOS/Fedora-based systems:
+
+    ```bash
+    sudo dnf install python3
+    ```
+
+* **Verification:**
+  To verify Python is installed and accessible, run:
+
+  ```bash
+  python --version
+  ```
+
+  or
+
+  ```bash
+  python3 --version
+  ```
+
+  The GUI launcher will automatically detect and use the correct command.
+
+---
+
+### Why is Python required?
+
+The NetSentinel GUI executable acts as a launcher that invokes the Python scanning engine (`main.py`). Therefore, the presence of a functional Python environment is mandatory for the scanning functions to execute correctly.
+
+---
+
+### Troubleshooting
+
+* If the GUI fails to launch scans and shows an error related to Python not found, ensure Python is installed and the executable is included in your system's `PATH`.
+
+* On Windows, check **Environment Variables** in System Settings to confirm Python is correctly added.
+
+* On Linux, you may need to create a symbolic link or adjust your `PATH` if Python is installed under a non-standard name or directory.
+
+
+
 ## 🚀 Usage
 
 ### Basic Network Scan
